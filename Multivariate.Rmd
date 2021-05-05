@@ -1,0 +1,147 @@
+---
+title: "VAR_Final"
+author: "Valarie Bryant"
+date: "4/26/2021"
+output: html_document
+---
+
+```{r}
+#reading in required libraries
+library(vars)
+library(astsa)
+library(tidyverse)
+library(fpp)
+library(fpp2)
+library(forecast)
+library(tseries)
+```
+
+
+```{r}
+#reading in the merged dataset with my time series
+data <- read_csv('MergedTS_Feb17.csv')
+data$Date <- as.Date(paste(data$Date,"-01",sep=""))
+#data <- data %>%
+ # select(-'X1')
+
+#subsetting the data by time
+data <- data %>%
+ filter(Date > '2003-12-01') %>%
+  filter(Date < '2020-03-01')#ensuring we have data present
+head(data)
+```
+
+
+
+Plotting a scatter matrix
+```{r}
+#par(mfrow=c(4,1)) # plot the data
+#plot(data$unemployment, main="Unemployment Rate", xlab="", ylab="") 
+#plot(data$g_unemployment, main="Google Searches for 'Unemployment'", xlab="", ylab="")
+#plot(data$consumer_sentiment, main="Consumer Sentiment", xlab="", ylab="")
+#plot(data$g_food_stamps, main="Google Searches for 'Food Stamps'", xlab="", ylab="")
+
+#jpeg("Output/scatter_matrix.jpg", width = 800, height = 800, quality = 100)
+
+pairs(cbind(Unemployment=data$unemployment, 
+            Searches_Unemployment=data$g_unemployment, 
+            Consumer_Sentiment=data$consumer_sentiment, 
+            Searches_Food_stamps = data$g_food_stamps), main = 'Economic Data Correlations')
+#dev.off()
+```
+
+# fitting a VAR(1) model on un-differenced data
+```{r}
+#binding the dataset together into an object, X
+x = cbind(Unemployment=data$unemployment, 
+            Searches_Unemployment=data$g_unemployment, 
+            Consumer_Sentiment=data$consumer_sentiment, 
+            Searches_Food_stamps = data$g_food_stamps)
+plot.ts(x , main = "", xlab = "")
+#detach("package:MTS", unload = TRUE) # https://stackoverflow.com/questions/35704112/error-in-r-trying-to-estmate-a-var-model 
+summary(VAR(x, p=1, type='both')) # 'both' fits constant + trend
+```
+
+# Trying VAR Select
+This notes that AIC is minimized with p = 4, but there are a lot of insignificant coefficients here
+```{r}
+###### select p #########        
+VARselect(x, lag.max=10, type="both")
+
+```
+# Examining VARselect recommendation
+```{r}
+#since VARselect suggested a minimum AIC with p = 4, I model that here
+#But, we find that very few of the coefficients are statistically significant.
+summary(VAR(x, p=4, type='both')) # 'both' fits constant + trend
+
+
+```
+
+
+
+
+
+
+Let's examine the residuals of the basic VAR(1) on undifferenced data.
+Mostly look like white noise, except for the second one (searches for unemployment)
+```{r}
+#examine residuals
+fitvar1 = VAR(x, p=1, type="both")
+
+#jpeg("Output/Combo_VAR1_res.jpg", width = 800, height = 600, quality = 100)
+par(mfrow=c(2,2))
+
+acf(residuals(fitvar1)[,1], main = 'Residuals on Unemployment')
+
+
+acf(residuals(fitvar1)[,2], main = 'Residuals on Searches for Unemployment')
+
+
+acf(residuals(fitvar1)[,3], main = 'Residuals on Consumer Sentiment')
+
+acf(residuals(fitvar1)[,4], main = "Residuals on Searches for Food Stamps")
+#dev.off()
+```
+
+
+cross-correlation matrix 
+
+```{r}
+acf(residuals(fitvar1))
+#mostly white noise, but print out to see
+```
+
+
+```{r}
+#looking at the Portmanteau test to examine model fit
+serial.test(fitvar1, lags.pt=12, type="PT.adjusted")
+```
+
+```{r}
+#plotting forecast
+(fit.pr = predict(fitvar1, n.ahead = 12, ci = 0.95)) #1 year ahead
+fanchart(fit.pr) # plot prediction + error
+```
+
+```{r}
+summary(VAR(x, p=1, type='both'))
+```
+
+
+
+
+############################################################# 
+############## Fitting ARMAX #######################
+##################################################################
+```{r}
+# https://datascience.stackexchange.com/questions/53955/auto-arima-with-xreg-in-r-restriction-on-forecast-periods 
+exogenous <- cbind(Sentiment = ts(data[, "consumer_sentiment"]),
+              Google_unemploy = ts(data[, "g_unemployment"]),
+              google_food = ts(data[, "g_food_stamps"]))
+econ_fit <- auto.arima(data[, "unemployment"], xreg = exogenous)
+
+summary(econ_fit)
+checkresiduals(econ_fit)
+```
+

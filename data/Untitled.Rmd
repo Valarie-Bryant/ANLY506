@@ -1,0 +1,39 @@
+---
+title: "Untitled"
+author: "Valarie Bryant"
+date: "2/11/2021"
+output: html_document
+---
+
+
+```{r}
+library(TSstudio)
+library(ggplot2)
+library(fpp)
+library(tidyverse)
+shanties <- read_csv('GTrends_shanty.csv')
+shanties$Date <- as.Date(paste(shanties$Month,"-01",sep=""))
+shanties_reduced <- shanties %>%
+  filter(Date < '2021-01-01')
+
+tail(shanties_reduced)
+#plot(as.ts(shanties))
+```
+
+
+```{r}
+ts_beer = ts(shanties_reduced$`Shanty: (United States)`, frequency = 12)
+decompose_beer = decompose(ts_beer, "additive")
+ 
+plot(as.ts(decompose_beer$seasonal))
+plot(as.ts(decompose_beer$trend))
+plot(as.ts(decompose_beer$random))
+plot(decompose_beer)
+```
+
+```{r}
+library(astsa)
+library(xts)
+acf(shanties_reduced$`Shanty: (United States)`)
+
+```

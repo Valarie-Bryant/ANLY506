@@ -1,0 +1,253 @@
+---
+title: "Untitled"
+author: "Valarie Bryant"
+date: "3/9/2021"
+output: html_document
+---
+
+# Libraries, Data
+```{r}
+#Reading in the needed libraries
+library(TSstudio)
+library(ggplot2)
+library(fpp)
+library(tidyverse)
+library(astsa)
+library(xts)
+library(forecast)
+library(gridExtra) #for the MA smoothing
+
+```
+
+```{r}
+#reading in the merged dataset
+# data merging done in Python Visualization file
+data <- read_csv('MergedTS_Feb17.csv')
+data$Date <- as.Date(paste(data$Date,"-01",sep=""))
+data <- data %>%
+  select(-X1)
+#head(data)
+data <- data %>%
+  filter(Date < '2020-02-01') #getting rid of COVID-era, for outliers
+tail(data)
+```
+
+# Basic Time Series
+```{r}
+#turning the data into time series in R
+ts_unemploy = ts(data$unemployment, frequency = 12)
+
+ts_sentiment = ts(data$consumer_sentiment, frequency = 12)
+ts_sentiment = na.remove(ts_sentiment)
+
+ts_g_unemploy = ts(data$g_unemployment, frequency = 12)
+ts_g_unemploy = na.remove(ts_g_unemploy)
+
+ts_g_food_stamps = ts(data$g_food_stamps, frequency = 12)
+ts_g_food_stamps = na.remove(ts_g_food_stamps)
+
+ts_g_gas = ts(data$g_gas, frequency = 12)
+ts_g_gas = na.remove(ts_g_gas)
+
+ts_food = ts(data$fs_households, frequency = 12)
+ts_food = na.remove(ts_food)
+
+ts_gas = ts(data$retail_gas, frequency = 12)
+ts_gas <- na.remove(ts_gas)
+
+
+```
+
+```{r}
+ggAcf(diff(ts_g_gas))
+
+#ts_G_unemploy has strong seasonality
+# ts_gas also has strong seasonality
+
+```
+
+# Fitting a model to Unemployment Rate 
+
+```{r}
+#making ACF plots of
+jpeg("Output/unemploy_acf.jpg", width = 600, height = 400, quality = 100)
+
+ggAcf(ts_unemploy)
+dev.off()
+```
+
+```{r}
+ggAcf(diff(diff(ts_unemploy)))
+ggAcf(diff(ts_unemploy))
+```
+
+
+
+```{r}
+#running the ADF test on the unemployment
+tseries::adf.test(ts_unemploy) #disagrees with the ACF
+
+```
+
+```{r}
+jpeg("Output/unemploy_diff_plots.jpg", width = 800, height = 600, quality = 100)
+
+#now to do the differencing
+ts_unemploy %>% 
+  #diff(lag=12) %>% 
+  diff(lag=12) %>% 
+  diff() %>% 
+  #diff() %>%
+  ggtsdisplay(lag.max = 72) #seasonal and ordinary differencing
+dev.off()
+```
+p = 2 
+d = 1
+q = 2
+P = 3
+D = 1
+Q = 1
+s = 12
+```{r}
+#differencing the data
+ts_unemploy %>% diff(lag=12)  %>% diff() %>% tseries::adf.test() #Now it looks stationary
+
+```
+
+```{r}
+#plot of model diagnostics
+jpeg("Output/unemploy_diagnostics.jpg", width = 800, height = 600, quality = 100)
+
+fit=sarima(ts_unemploy,0,1,0,3,1,1,12)
+fit
+dev.off()
+```
+
+$x_t= x_{t-1}+ .81x_{t-12} - .81x_{t-13} + .01x_{t-24} -.01x_{t-25} -.18x_{t-27} + .03x_{t-36} +.15x_{t-37} + .15x_{t-48} +.15x_{t-49} -w_}t-12 + w_{t}$
+
+
+```{r}
+#now running R's Auto Arima feature for comparison
+ARIMAfit=auto.arima(ts_unemploy, allowdrift = TRUE)
+summary(ARIMAfit)
+```
+
+```{r}
+#now doing model diagnostics on what auto.arima() suggested
+jpeg("Output/unemploy_suggested_diagnostics.jpg", width = 800, height = 600, quality = 100)
+
+fit=sarima(ts_unemploy,4,1,1,2,0,2,12)
+fit
+dev.off()
+```
+
+
+
+```{r}
+jpeg("Output/unemploy_forecast.jpg", width = 800, height = 400, quality = 100)
+
+#forecasting unemployment rate
+fit1 <- Arima(ts_unemploy, order=c(4,1,1),seasonal = c(2,0,2))
+forecast1 = forecast(fit1,36) #also gives you C.I
+autoplot(forecast1, 
+         main = 'Three Year Forecast of US Unemployment with SARIMA(4,1,1)(2,0,2)', 
+         ylab = 'Unemployment Rate')
+dev.off()
+```
+
+
+# ############################################################################################################
+
+# Modeling the Google Searches for Unemployment
+
+# ############################################################################################################
+
+This section repeats the code from above, but on Google searches for 'unemployment', from Google Trends data.
+
+```{r}
+jpeg("Output/Gunemploy_acf.jpg", width = 800, height = 400, quality = 100)
+
+ggAcf(ts_g_unemploy) #definitely not stationary
+dev.off()
+#ggAcf(diff(ts_g_unemploy)) #strong seasonality
+```
+
+```{r}
+tseries::adf.test(ts_g_unemploy) #suggests its non-stationary, which agrees with the ADF
+```
+
+```{r}
+#now to do the differencing
+jpeg("Output/Gunemploy_diff_acf.jpg", width = 800, height = 400, quality = 100)
+
+ts_g_unemploy %>% 
+  diff(lag=12) %>% 
+  diff() %>% 
+  ggtsdisplay() #seasonal and ordinary differencing
+dev.off()
+```
+p = 0, 
+d = 1
+q = 0
+P = 2
+D = 1
+Q = 1
+s = 12
+```{r}
+ts_g_unemploy %>% diff(lag=12) %>% diff() %>% tseries::adf.test() #Now it looks stationary
+
+```
+
+
+model fitting, and diagnostic plots
+```{r}
+#fit0=sarima(ts_g_unemploy, 0,1,0,2,1,1,12)
+#fit1=sarima(ts_g_unemploy, 1,1,0,2,1,1,12)
+fit2=sarima(ts_g_unemploy, 2,1,0,2,1,1,12)
+#fit3=sarima(ts_g_unemploy, 3,1,0,2,1,1,12)
+#fit4=sarima(ts_g_unemploy, 4,1,0,2,1,1,12)
+
+
+#fit0
+#fit1
+jpeg("Output/Gunemploy_diagnostics.jpg", width = 800, height = 400, quality = 100)
+fit2=sarima(ts_g_unemploy, 2,1,0,2,1,1,12)
+
+fit2
+dev.off()
+
+```
+
+
+
+
+
+```{r}
+#testing the auto.arima() function
+ARIMAfit_g_unemploy=auto.arima(ts_g_unemploy, allowdrift = TRUE)
+summary(ARIMAfit_g_unemploy)
+```
+
+```{r}
+
+jpeg("Output/Gunemploy_suggested_diagnostics.jpg", width = 800, height = 400, quality = 100)
+fit_suggestedG
+fit_suggestedG = sarima(ts_g_unemploy, 0,1,0,2,0,0,12)
+
+dev.off()
+```
+
+
+
+```{r}
+#forecasting google searches for unemployment
+jpeg("Output/Gunemploy_forecast.jpg", width = 800, height = 400, quality = 100)
+
+fitg <- Arima(ts_g_unemploy, order=c(2, 1, 0), seasonal=c(2,1,1),lambda=0)
+forecast1 = forecast(fitg,36) #also gives you C.I
+autoplot(forecast1, 
+         main = 'Three Year Forecast of Google Searches for Unemployment', 
+         ylab = 'Google Trends')
+dev.off()
+```
+

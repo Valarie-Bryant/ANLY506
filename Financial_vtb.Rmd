@@ -1,0 +1,129 @@
+---
+title: "Financial Analysis: Target Stock"
+author: "Valarie Bryant"
+date: "4/20/2021"
+output: html_document
+---
+```{r}
+#reading in required libraries
+rm(list = ls(all = TRUE))   # Remove objects from the previous session
+library(tidyverse)
+library(TSA)
+library(fGarch) 
+library(dynlm)
+library(tseries)
+library(astsa) 
+library(xts)
+library(fpp)
+library(astsa)
+library(ggplot2)
+```
+
+data source: 
+https://finance.yahoo.com/quote/TGT/history?p=TGT 
+
+```{r}
+#reading in data
+target <- read_csv("TGT.csv")
+head(target)
+```
+
+
+```{r}
+#plotting the data
+jpeg("Output/TGT_Close.jpg", width = 800, height = 600, quality = 100)
+
+close <- ts(target$Close)
+plot(close, main = "Target Closing Stock Price, April 2016- April 2021")
+dev.off()
+```
+
+
+```{r}
+#differencing, logging, to get returns, and plotting returns.
+jpeg("Output/TGT_Returns.jpg", width = 1000, height = 300, quality = 100)
+
+r.target=diff(log(close))*100
+plot(r.target, main = "Differenced Log of Target Closing Prices")
+dev.off()
+```
+
+
+```{r}
+# Examining the PACF of the returns
+#jpeg("Output/TGT_Returns_PACF.jpg", width = 800, height = 700, quality = 100)
+
+par(mfrow=c(2,1))
+
+acf(r.target)
+pacf(r.target)
+#dev.off()
+```
+
+
+```{r}
+# ACF & PACF of the squared series
+#jpeg("Output/TGT_Returns_sq_PACF.jpg", width = 800, height = 700, quality = 100)
+par(mfrow=c(2,1))
+
+acf(r.target^2)
+pacf(r.target^2)
+#dev.off()
+```
+The ACF and PACF only have a first value that is barely statistically significant, suggesting we have white noise OR an ARMA(1,1) model.
+Looking at the ACF/ PACF of the squared returns, we may want to fit a GARCH(2,2)
+
+
+```{r}
+#fitting an ARIMA model on the returns themselves
+arma = Arima(r.target, order=c(1,0,1)) 
+arma.re= arma$residuals
+```
+
+
+#running GARCH on raw returns, with no ARMA
+```{r}
+summary(garchFit(~garch(2,2),r.target, trace = F))
+
+summary(garchFit(~garch(2,1),r.target, trace = F)) #### this is the best, based on AIC/BIC
+summary(garchFit(~garch(1,2), r.target, trace = F)) #### this returns lots of NA values, no standard errors?
+
+summary(garchFit(~garch(1,1),r.target, trace = F))
+
+```
+
+
+# Models with an ARMA(1,1), then GARCH
+```{r}
+summary(garchFit(~garch(2,2),arma.re,trace = F))
+summary(garchFit(~garch(1,1),arma.re,trace = F))
+summary(garchFit(~garch(2,1),arma.re,trace = F))
+summary(garchFit(~garch(1,2),arma.re,trace = F))
+```
+
+
+```{r}
+#looking at those basic residuals
+jpeg("Output/TGT_ARMA.jpg", width = 800, height = 500, quality = 100)
+
+checkresiduals(arma.re)
+dev.off()
+```
+
+
+
+```{r}
+#examining the residuals of a GARCH (1,1) on the raw returns
+jpeg("Output/TGT_GARCH.jpg", width = 800, height = 500, quality = 100)
+
+fit2 = garch(r.target,order=c(1,1),trace=F)
+checkresiduals(fit2) #relatively doing a good job
+dev.off()
+
+```
+
+
+```{r}
+Box.test(fit2$residuals, type = "Ljung")
+```
+ We have a high p-value, so we do not reject the null hypothesis of independence, which is good!

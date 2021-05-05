@@ -1,0 +1,97 @@
+---
+title: "Spectral Analysis"
+author: "Valarie Bryant"
+date: "4/7/2021"
+output: html_document
+---
+
+Reading in Libraries
+```{r}
+library(astsa)
+library(xts)
+library(ggplot2)
+library(fpp2)
+library(fma)
+library(forecast)
+library(lubridate)
+library(tidyverse)
+
+```
+
+
+```{r}
+#reading in the merged dataset
+# data merging done in Python Visualization file
+data <- read_csv('MergedTS_Feb17.csv')
+data$Date <- as.Date(paste(data$Date,"-01",sep=""))
+data <- data %>%
+  select(-X1)
+#data <- data %>%
+ # filter(Date < '2020-02-01') #getting rid of COVID
+head(data)
+```
+
+## Gas Prices in US 
+
+```{r}
+gas_data <- data %>%
+  filter(!is.na(retail_gas)) #filter for any missing values
+plot(decompose(ts(gas_data$retail_gas, frequency = 12), 'additive'))
+```
+```{r}
+#plotting periodogram
+specvalues_gas = mvspec(diff(gas_data$retail_gas), log="no")
+```
+```{r}
+#examining periodogram
+which.max(specvalues_gas$spec) 
+specvalues_gas$freq[which.max(specvalues_gas$spec)]
+1/specvalues_gas$fre[which.max(specvalues_gas$spec)] 
+```
+
+
+```{r}
+#plotting a smoothed periodogram
+jpeg("Output/spectral_gas.jpg", width = 800, height = 600, quality = 100)
+sp_gas = mvspec(diff(gas_data$retail_gas), spans=c(9,9), log="no", main = "Smoothed Periodogram of US Gas Prices")
+dev.off()
+
+```
+```{r}
+which.max(sp_gas$spec) 
+sp_gas$freq[which.max(sp_gas$spec)]
+1/sp_gas$fre[which.max(sp_gas$spec)] 
+```
+
+
+
+# Google searches for 'cheap gas'
+
+```{r}
+#plotting decomposition of the google searches
+trends_data <- data %>%
+  filter(!is.na(g_gas))
+plot(decompose(ts(trends_data$g_gas, frequency = 12), 'additive'))
+```
+
+
+```{r}
+#plotting smoothed periodogram
+jpeg("Output/spectral_g_gas.jpg", width = 800, height = 600, quality = 100)
+
+specvalues_g_gas = mvspec(diff(trends_data$g_gas), spans=c(9,9), log="no", main = "Smoothed Periodogram of Google Trends for 'Cheap Gas'")
+dev.off()
+
+```
+
+```{r}
+#examining frequencies
+which.max(specvalues_g_gas$spec) 
+specvalues_g_gas$freq[which.max(specvalues_g_gas$spec)]
+1/specvalues_g_gas$fre[which.max(specvalues_g_gas$spec)] 
+```
+
+
+
+
+

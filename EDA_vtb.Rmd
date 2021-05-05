@@ -1,0 +1,249 @@
+---
+title: "Exploratory Data Analysis"
+author: "Valarie Bryant"
+date: "2/13/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Libraries, Data
+```{r }
+#importing libraries related to time series, visualization
+library(TSstudio)
+library(ggplot2)
+library(fpp)
+library(tidyverse)
+library(astsa)
+library(xts)
+```
+
+```{r}
+#reading in the merged dataset
+# data merging done in Python Visualization file
+data <- read_csv('MergedTS_Feb17.csv')
+data$Date <- as.Date(paste(data$Date,"-01",sep=""))
+data <- data %>%
+  select(-X1)
+head(data)
+```
+# Basic Time Series
+```{r}
+#reading in the data as time series, monthly
+ts_unemploy = ts(data$unemployment, frequency = 12)
+
+ts_sentiment = ts(data$consumer_sentiment, frequency = 12)
+ts_sentiment = na.remove(ts_sentiment)
+
+ts_g_unemploy = ts(data$g_unemployment, frequency = 12)
+ts_g_unemploy = na.remove(ts_g_unemploy)
+
+ts_g_food_stamps = ts(data$g_food_stamps, frequency = 12)
+ts_g_food_stamps = na.remove(ts_g_food_stamps)
+
+ts_g_gas = ts(data$g_gas, frequency = 12)
+ts_g_gas = na.remove(ts_g_gas)
+
+ts_food = ts(data$fs_households, frequency = 12)
+ts_food = na.remove(ts_food)
+
+ts_gas = ts(data$retail_gas, frequency = 12)
+ts_gas <- na.remove(ts_gas)
+
+
+```
+
+
+
+# Lagged Plots, Consumer Sentiment
+```{r}
+p <- gglagplot(ts_sentiment, do.lines=FALSE) +
+  ggtitle('Lag Plot of Consumer Sentiment')
+p
+ggsave('lag_sentiment.png')
+```
+
+#Decomposed Unemployment Rate
+```{r}
+jpeg("decompose_unemploy.jpg", width = 1100, height = 800)
+
+decompose_unemploy = decompose(ts_unemploy, "additive")
+
+plot(decompose_unemploy)
+dev.off()
+```
+
+# ACF Plot, PACF, and Dickey-Fuller Test of food stamps
+
+```{r}
+# https://stackoverflow.com/questions/43151069/acf-plot-title-change/51893811
+jpeg("acf_food.jpg", width = 1100, height = 400, quality = 100)
+
+acf(ts_food, lag.max = 48, main = '48 Month Lag on Food Stamps')
+dev.off()
+```
+
+```{r}
+# https://stackoverflow.com/questions/43151069/acf-plot-title-change/51893811
+jpeg("pacf_food.jpg", width = 1100, height = 400, quality = 100)
+
+pacf(ts_food, lag.max = 48, main = '48 Month PACF on Food Stamps')
+dev.off()
+```
+
+```{r}
+#df.ts=ts(WWWusage)
+autoplot(ts_food)
+tseries::adf.test(ts_food)
+
+#P-value is greater than 0.05. So obviously the series in not stationary.
+# If the P-value is greater than .05, the series isn't stationary
+
+```
+
+
+# ACF Plot, PACF, and Dickey-Fuller Test of gas prices
+
+```{r}
+# https://stackoverflow.com/questions/43151069/acf-plot-title-change/51893811
+jpeg("acf_gas.jpg", width = 1100, height = 400, quality = 100)
+
+acf(ts_gas, lag.max = 24, main = '24 Month Lag on Gas Prices')
+dev.off()
+```
+
+```{r}
+# https://stackoverflow.com/questions/43151069/acf-plot-title-change/51893811
+jpeg("pacf_gas.jpg", width = 1100, height = 400, quality = 100)
+
+pacf(ts_gas, lag.max = 24, main = '24 Month PACF on Gas Prices')
+dev.off()
+```
+
+
+# ADF test on gas prices
+```{r}
+#df.ts=ts(WWWusage)
+autoplot(ts_food)
+tseries::adf.test(ts_gas)
+
+#P-value is greater than 0.05. So obviously the series in not stationary.
+# If the P-value is greater than .05, the series isn't stationary
+
+```
+
+#google trends for Cheap gas, plotting
+```{r}
+jpeg("g_gas_difference.jpg", width = 800, height = 800, quality = 300)
+
+par(mfrow = c(3,1))
+df1=diff(ts_g_gas)
+df2 = diff(df1)
+plot(ts_g_gas, main = "Time Series of Google Trends for 'Cheap Gas'")
+plot(df1, main ="1st Order Differencing on Google Trends for 'Cheap Gas'")
+plot(df2, main ="2nd Order Differencing on Google Trends for 'Cheap Gas'")
+dev.off()
+```
+
+
+
+(c). If the series is not stationary, use a necessary method/s to make the series stationary. Plot the ACF to see it's stationarity.
+```{r}
+jpeg("g_gas_difference_acf.jpg", width = 800, height = 800, quality = 300)
+
+par(mfrow = c(3,1))
+acf(ts_g_gas, main = "ACF of Google Trends for 'Cheap Gas'")
+acf(df1, main = "ACF of 1st Differenced Google Trends for 'Cheap Gas" )
+acf(df2, main = "ACF of 2nd Differenced Google Trends for 'Cheap Gas")
+dev.off()
+```
+
+```{r}
+jpeg("decompose_gas.jpg", width = 800, height = 600, quality = 300)
+
+ts_gas %>%
+  stl(s.window="periodic", robust=TRUE) %>%
+  autoplot(main = 'Decomposed US Gas Prices, 1993-2021')
+dev.off()
+```
+
+# Moving Average Smoothing
+
+#Gas Prices
+```{r}
+jpeg("MA_Smooth_gas.jpg", width = 1000, height = 600, quality = 300)
+
+ma3g <- autoplot(ts_gas, series="Data") +
+  autolayer(ma(ts_gas,3), series="3-MA") +
+  xlab("Month") + ylab("Price of Gas ($)") +
+  ggtitle("US Retail Gas Prices, 3-month smoothing") +
+  scale_colour_manual(values=c("Data"="grey50","3-MA"="red"),
+                      breaks=c("Data","3-MA"))
+
+ma6g <- autoplot(ts_gas, series="Data") +
+  autolayer(ma(ts_gas,6), series="6-MA") +
+  xlab("Month") + ylab("Price of Gas ($)") +
+  ggtitle("US Retail Gas Prices, 6-month smoothing") +
+  scale_colour_manual(values=c("Data"="grey50","6-MA"="red"),
+                      breaks=c("Data","6-MA"))
+
+ma12g <- autoplot(ts_gas, series="Data") +
+  autolayer(ma(ts_gas,12), series="12-MA") +
+  xlab("Month") + ylab("Price of Gas ($)") +
+  ggtitle("US Retail Gas Prices, 12-month smoothing") +
+  scale_colour_manual(values=c("Data"="grey50","12-MA"="red"),
+                      breaks=c("Data","12-MA"))
+
+ma24g <- autoplot(ts_gas, series="Data") +
+  autolayer(ma(ts_gas,24), series="24-MA") +
+  xlab("Month") + ylab("Price of Gas ($)") +
+  ggtitle("US Retail Gas Prices, 24-month smoothing") +
+  scale_colour_manual(values=c("Data"="grey50","24-MA"="red"),
+                      breaks=c("Data","24-MA"))
+
+
+
+grid.arrange(ma3g, ma6g,ma12g,ma24g, nrow = 2, ncol=2)
+dev.off()
+
+```
+
+
+#Moving Average Smoothing on Consumer Sentiment
+```{r}
+jpeg("MA_Smooth_cs.jpg", width = 1300, height = 600, quality = 300)
+
+ma3s <- autoplot(ts_sentiment, series="Data") +
+  autolayer(ma(ts_sentiment,3), series="3-MA") +
+  xlab("Month") + ylab("Consumer Sentiment") +
+  ggtitle("Consumer Sentiment, 3-month smoothing") +
+  scale_colour_manual(values=c("Data"="grey50","3-MA"="red"),
+                      breaks=c("Data","3-MA"))
+
+ma6s <- autoplot(ts_sentiment, series="Data") +
+  autolayer(ma(ts_sentiment,6), series="6-MA") +
+  xlab("Month") + ylab("Consumer Sentiment") +
+  ggtitle("Consumer Sentiment, 6-month smoothing") +
+  scale_colour_manual(values=c("Data"="grey50","6-MA"="red"),
+                      breaks=c("Data","6-MA"))
+
+ma12s <- autoplot(ts_sentiment, series="Data") +
+  autolayer(ma(ts_sentiment,12), series="12-MA") +
+  xlab("Month") + ylab("Consumer Sentiment") +
+  ggtitle("Consumer Sentiment, 12-month smoothing") +
+  scale_colour_manual(values=c("Data"="grey50","12-MA"="red"),
+                      breaks=c("Data","12-MA"))
+
+ma24s <- autoplot(ts_sentiment, series="Data") +
+  autolayer(ma(ts_sentiment,24), series="24-MA") +
+  xlab("Month") + ylab("Consumer Sentiment") +
+  ggtitle("Consumer Sentiment, 24-month smoothing") +
+  scale_colour_manual(values=c("Data"="grey50","24-MA"="red"),
+                      breaks=c("Data","24-MA"))
+
+grid.arrange(ma3s, ma6s,ma12s,ma24s, nrow = 2, ncol=2)
+dev.off()
+
+```

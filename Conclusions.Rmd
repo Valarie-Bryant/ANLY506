@@ -1,0 +1,81 @@
+---
+title: "Conclusions"
+author: "Valarie Bryant"
+date: "5/3/2021"
+output: html_document
+---
+
+# Libraries, Data
+```{r}
+#Reading in the needed libraries
+library(TSstudio)
+library(ggplot2)
+library(fpp)
+library(tidyverse)
+library(astsa)
+library(xts)
+library(forecast)
+library(gridExtra) #for the MA smoothing
+
+```
+
+```{r}
+#reading in the merged dataset with my time series
+data <- read_csv('MergedTS_Feb17.csv')
+data$Date <- as.Date(paste(data$Date,"-01",sep=""))
+
+#subsetting the data by time
+data <- data %>%
+ filter(Date > '2003-12-01') %>%
+  filter(Date < '2020-01-01')#ensuring we have data present
+head(data)
+```
+
+```{r}
+#getting the actual unemployment rate
+full_data <- read_csv('MergedTS_Feb17.csv')
+full_data$Date <- as.Date(paste(full_data$Date,"-01",sep=""))
+
+covid_era<- full_data %>%
+ filter(Date > '2003-12-01')
+
+actual_unemploy = ts(covid_era$unemployment, frequency = 12)
+plot(actual_unemploy)
+```
+
+
+
+# SARIMA Forecast
+```{r}
+ts_unemploy = ts(data$unemployment, frequency = 12)
+fit_ARIMA <- Arima(ts_unemploy, order=c(4,1,1),seasonal = c(2,0,2))
+forecast1 = forecast(fit_ARIMA,12) #also gives you C.I
+autoplot(forecast1, 
+         main = 'Forecast of US Unemployment with SARIMA(4,1,1)(2,0,2)', 
+         ylab = 'Unemployment Rate')
+```
+
+
+```{r}
+#jpeg("Output/forecast_benchmarks.jpg", width = 800, height = 500, quality = 100)
+
+# Plot some forecasts
+autoplot(ts_unemploy) +
+  autolayer(meanf(ts_unemploy, h=12),
+    series="Mean", PI=FALSE) +
+  autolayer(forecast1, series = "SARIMA") +
+  autolayer(actual_unemploy, series = "Actual Rate")   +
+  autolayer(naive(ts_unemploy, h=12),
+    series="Naïve", PI=FALSE) +
+  #autolayer(snaive(ts_unemploy, h=24),
+  #  series="Seasonal naïve", PI=FALSE) +
+  ggtitle("Forecasts for US Unemployment in 2020") +
+  xlab("Year") + ylab("Unemployment Rate") +
+  guides(colour=guide_legend(title="Forecast"))
+#dev.off()
+```
+
+
+
+
+
