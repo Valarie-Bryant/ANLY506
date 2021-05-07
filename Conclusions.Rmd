@@ -37,7 +37,8 @@ full_data <- read_csv('MergedTS_Feb17.csv')
 full_data$Date <- as.Date(paste(full_data$Date,"-01",sep=""))
 
 covid_era<- full_data %>%
- filter(Date > '2003-12-01')
+ filter(Date > '2003-12-01') %>%
+  filter(Date <'2021-01-01')
 
 actual_unemploy = ts(covid_era$unemployment, frequency = 12)
 plot(actual_unemploy)
@@ -73,6 +74,30 @@ autoplot(ts_unemploy) +
   xlab("Year") + ylab("Unemployment Rate") +
   guides(colour=guide_legend(title="Forecast"))
 #dev.off()
+```
+```{r}
+test <- actual_unemploy[193:204]
+
+ts_unemploy = ts(data$unemployment, frequency = 12)
+fit_ARIMA <- Arima(ts_unemploy, order=c(4,1,1),seasonal = c(2,0,2))
+forecast1 = forecast(fit_ARIMA,12) #also gives you C.I
+```
+
+#Error rates of these forecasting methods
+
+```{r}
+
+train <- actual_unemploy[1:192]
+test <- actual_unemploy[193:204]
+
+accuracy(forecast1, test) #mean
+ 
+mean_forecast<- meanf(train, h=12) 
+accuracy(mean_forecast,test)
+
+naive_forecast <- naive(train, h=12) 
+accuracy(naive_forecast,test)
+
 ```
 
 
